@@ -5,6 +5,7 @@ const endecryption = require("../helper/common");
 const helper = require("../helper/common");
 const db = require("../model/db");
 const keyfile = require("../config/keyfile");
+const mongoose=require('mongoose')
 
 exports.register = async (req, res) => {
   try {
@@ -297,17 +298,38 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-exports.GetOneUser = async (req, res) => {
+exports.getUserDetails = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log("TCL: exports.GetOneUser -> userId", userId);
-    const data = await db.user.find(userId);
-    console.log("TCL: exports.getUsers -> data", data);
-    if (data.length > 0) {
+    console.log("userid",userId)
+    const data = await db.user.findOne({_id: new mongoose.Types.ObjectId(userId)});
+    console.log('data : ' ,data.registerType)
+    var object;
+    if ((data.registerType == "jobs")) {
+      object = {
+        id: data._id,
+        email: data.email,
+        userName: data.userName,
+        phone: data.phone,
+        registerType: data.registerType,
+      };
+    }
+     else if ((data.registerType == "employee")) {
+      object = {
+        id: data._id,
+        companyName: data.companyName,
+        businessEmail: data.businessEmail,
+        businessNumber: data.businessNumber,
+        address: data.address,
+        registerType: data.registerType,
+      };
+    }
+    if (data != null) {
+      
       res.status(200).json({
         status: true,
-        msg: "Users retrieved successfully",
-        result: data,
+        msg: "Users details retrieved successfully",
+        data: object,
       });
     } else {
       res.status(404).json({ status: false, msg: "No users found" });

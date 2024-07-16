@@ -12,7 +12,7 @@ router.post('/login',controller.login)
 
 router.post('/register',controller.register)
 
-router.get('/GetOneUser',helper.verifyPayload,controller.GetOneUser)
+router.get('/getUserDetails',helper.verifyPayload,controller.getUserDetails)
 
 router.get('/logout',helper.verifyPayload,controller.logout)
 
