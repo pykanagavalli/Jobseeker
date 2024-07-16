@@ -2,14 +2,9 @@ const user = require("../schema/user");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const endecryption = require("../helper/common");
-const helper=require('../helper/common')
+const helper = require("../helper/common");
 const db = require("../model/db");
 const keyfile = require("../config/keyfile");
-
-const tokenVerify = (token) => {
-  let decode = helper.jwtDecode(req.headers.authorization.split(" ")[1]);
-  let userId = decode.subject._id;
-};
 
 exports.register = async (req, res) => {
   try {
@@ -19,10 +14,10 @@ exports.register = async (req, res) => {
       return res
         .status(400)
         .json({ status: false, msg: "Register type is required" });
-    } 
+    }
 
     let object;
-    const emailToCheck =  
+    const emailToCheck =
       info.registerType === "employee" ? info.businessEmail : info.email;
 
     const existingUser = await db.user.findOne(
@@ -167,14 +162,18 @@ exports.login = async (req, res) => {
         .status(404)
         .json({ status: false, msg: "Password is incorrect" });
     }
-    let userToken = helper.createPayload({ _id: user._id, email: user.email}, keyfile.JWT_SECRET, {
-      expiresIn: "1y",
-    });
+    let userToken = helper.createPayload(
+      { _id: user._id, email: user.email },
+      keyfile.JWT_SECRET,
+      {
+        expiresIn: "1y",
+      }
+    );
 
     const token = jwt.sign({ id: user._id }, keyfile.JWT_SECRET, {
       expiresIn: "1y",
     });
-    console.log("token",userToken);
+    console.log("token", userToken);
 
     res.status(200).json({
       status: true,
@@ -300,11 +299,10 @@ exports.deleteUser = async (req, res) => {
 
 exports.GetOneUser = async (req, res) => {
   try {
-
     const userId = req.user._id;
-		console.log("TCL: exports.GetOneUser -> userId", userId);
+    console.log("TCL: exports.GetOneUser -> userId", userId);
     const data = await db.user.find(userId);
-		console.log("TCL: exports.getUsers -> data", data);
+    console.log("TCL: exports.getUsers -> data", data);
     if (data.length > 0) {
       res.status(200).json({
         status: true,
@@ -317,4 +315,34 @@ exports.GetOneUser = async (req, res) => {
   } catch (err) {
     res.status(400).json({ status: false, msg: err.message });
   }
+};
+
+exports.Logout = async (req, res) => {
+  try {
+    const authHeader = req.headers["cookie"]; // get the session cookie from request header
+    if (!authHeader) return res.sendStatus(204); // No content
+    const cookie = authHeader.split("=")[1]; // If there is, split the cookie string to get the actual jwt token
+    const accessToken = cookie.split(";")[0];
+    const checkIfBlacklisted = await db.blacklist.findOne({
+      token: accessToken,
+    }); // Check if that token is blacklisted
+    // if true, send a no content response.
+    if (checkIfBlacklisted) 
+    return;
+    res.sendStatus(204);
+    // otherwise blacklist token
+    const newBlacklist = new db.blacklist({
+      token: accessToken,
+    });
+    await newBlacklist.save();
+    // Also clear request cookie on client
+    res.setHeader("Clear-Site-Data", '"cookies"');
+    res.status(200).json({ message: "You are logged out!" });
+  } catch (err) {
+    res.status(500).json({
+      status: "error",
+      message: "Internal Server Error",
+    });
+  }
+  res.end();
 };
