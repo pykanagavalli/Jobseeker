@@ -317,32 +317,41 @@ exports.GetOneUser = async (req, res) => {
   }
 };
 
-exports.Logout = async (req, res) => {
+exports.logout = async (req, res) => {
   try {
-    const authHeader = req.headers["cookie"]; // get the session cookie from request header
-    if (!authHeader) return res.sendStatus(204); // No content
-    const cookie = authHeader.split("=")[1]; // If there is, split the cookie string to get the actual jwt token
-    const accessToken = cookie.split(";")[0];
-    const checkIfBlacklisted = await db.blacklist.findOne({
-      token: accessToken,
-    }); // Check if that token is blacklisted
-    // if true, send a no content response.
-    if (checkIfBlacklisted) 
-    return;
-    res.sendStatus(204);
-    // otherwise blacklist token
-    const newBlacklist = new db.blacklist({
-      token: accessToken,
-    });
+    const authHeader = req.headers["authorization"]; // Ensure the header key is correct
+    if (!authHeader) {
+      console.log("No auth header found");
+      return res.sendStatus(204); // No content
+    }
+
+    // Extract the token from the authorization header (assuming Bearer scheme)
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      console.log("No token found in the authorization header");
+      return res.sendStatus(204); // No content
+    }
+
+    const checkIfBlacklisted = await db.blacklist.findOne({ token: token }); // Check if the token is blacklisted
+    if (checkIfBlacklisted) {
+      console.log("Token is already blacklisted");
+      return res.sendStatus(204); // No content
+    }
+
+    const newBlacklist = new db.blacklist({ token: token }); // Add the token to the blacklist
     await newBlacklist.save();
-    // Also clear request cookie on client
-    res.setHeader("Clear-Site-Data", '"cookies"');
+
+    // Clear the cookie on the client side
+    res.setHeader('Set-Cookie', 'accessToken=; HttpOnly; Path=/; Max-Age=0');
     res.status(200).json({ message: "You are logged out!" });
   } catch (err) {
+    console.error("Error during logout:", err);
     res.status(500).json({
       status: "error",
       message: "Internal Server Error",
     });
   }
-  res.end();
 };
+
+
+

@@ -14,7 +14,7 @@ router.post('/register',controller.register)
 
 router.get('/GetOneUser',helper.verifyPayload,controller.GetOneUser)
 
-router.get('/logout',helper.verifyPayload,controller.Logout)
+router.get('/logout',helper.verifyPayload,controller.logout)
 
 
 module.exports = router;
