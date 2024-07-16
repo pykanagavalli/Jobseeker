@@ -2,8 +2,14 @@ const user = require("../schema/user");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const endecryption = require("../helper/common");
+const helper=require('../helper/common')
 const db = require("../model/db");
 const keyfile = require("../config/keyfile");
+
+const tokenVerify = (token) => {
+  let decode = helper.jwtDecode(req.headers.authorization.split(" ")[1]);
+  let userId = decode.subject._id;
+};
 
 exports.register = async (req, res) => {
   try {
@@ -13,10 +19,10 @@ exports.register = async (req, res) => {
       return res
         .status(400)
         .json({ status: false, msg: "Register type is required" });
-    }
+    } 
 
     let object;
-    const emailToCheck =
+    const emailToCheck =  
       info.registerType === "employee" ? info.businessEmail : info.email;
 
     const existingUser = await db.user.findOne(
@@ -45,12 +51,10 @@ exports.register = async (req, res) => {
         !info.address ||
         !info.password
       ) {
-        return res
-          .status(400)
-          .json({
-            status: false,
-            msg: "Missing fields for employee registration",
-          });
+        return res.status(400).json({
+          status: false,
+          msg: "Missing fields for employee registration",
+        });
       }
 
       object = {
@@ -163,16 +167,19 @@ exports.login = async (req, res) => {
         .status(404)
         .json({ status: false, msg: "Password is incorrect" });
     }
+    let userToken = helper.createPayload({ _id: user._id, email: user.email}, keyfile.JWT_SECRET, {
+      expiresIn: "1y",
+    });
 
     const token = jwt.sign({ id: user._id }, keyfile.JWT_SECRET, {
       expiresIn: "1y",
     });
-    console.log(user);
+    console.log("token",userToken);
 
     res.status(200).json({
       status: true,
       msg: "Login Success",
-      accessToken: token,
+      accessToken: userToken,
       user: {
         id: user._id,
         userName: user.userName,
@@ -291,9 +298,13 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-exports.getUsers = async (req, res) => {
+exports.GetOneUser = async (req, res) => {
   try {
-    const data = await db.user.find({});
+
+    const userId = req.user._id;
+		console.log("TCL: exports.GetOneUser -> userId", userId);
+    const data = await db.user.find(userId);
+		console.log("TCL: exports.getUsers -> data", data);
     if (data.length > 0) {
       res.status(200).json({
         status: true,

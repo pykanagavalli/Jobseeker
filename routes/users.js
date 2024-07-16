@@ -1,6 +1,7 @@
 var express = require('express');
 var router = express.Router();
 const controller = require('../controller/auth')
+const helper = require('../helper/common')
 
 /* GET users listing. */
 router.get('/', function(req, res, next) {
@@ -10,5 +11,7 @@ router.get('/', function(req, res, next) {
 router.post('/login',controller.login)
 
 router.post('/register',controller.register)
+
+router.get('/GetOneUser',helper.verifyPayload,controller.GetOneUser)
 
 module.exports = router;

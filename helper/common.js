@@ -3,8 +3,9 @@ const keyfile = require("../config/keyfile");
 const db = require("../model/db");
 const fs = require("fs");
 const crypto = require("crypto");
+const mongoose=require('mongoose')
 // const jwt_decode = require("jwt-decode");
-var jwtTokenUser = keyfile.JWT_SECREAT;
+var jwtTokenUser = keyfile.JWT_SECRET;
 const algorithm =keyfile.ALGORITHM;
 const password = keyfile.PASSWORD
 const iv = keyfile.IV
@@ -29,28 +30,30 @@ exports.createPayload = (key) => {
     return token;
 };
 
-exports.verifyPayload = (req, res, next) => {
-    if (req.headers.authorization) {
-        let token = req.headers.authorization.split(" ")[1];
-        if (token != null) {
-            jwt.verify(token, jwtTokenUser, (err, payload) => {
-                if (payload) {
-                    let userid = payload.subject;
-                    req.userId = userid;
-                    next();
-                } else {
-                    res.status(401).json({ status: false, message: "Unauthorized" });
-                }
-            });
-        } else {
-            res.status(401).json({ status: false, message: "Unauthorized" });
+exports.verifyPayload = async(req, res, next) => {
+    try {
+        const token = req.headers.authorization.split(" ")[1];
+        if (!token) {
+          return res.status(401).json({ message: 'Authorization token missing' });
         }
-    } else {
-        res.status(401).json({ status: false, message: "Unauthorized" });
-    }
-};
+    
+        const decode = jwt.verify(token, keyfile.JWT_SECRET); // Replace 'your_secret_key' with your actual secret key
+        const userId = decode.subject._id;
 
-const jwtDecode = (token) => {
+        const user = await db.user.findOne({_id:userId})
+        if (!user) {
+          return res.status(401).json({ message: 'User not found' });
+        }
+    
+        req.user = user; // Attach the user to the request object for use in the route handlers
+        next();
+      } catch (error) {
+        return res.status(401).json({ message: 'Authentication failed', error });
+      }
+  };
+  
+
+exports.jwtDecode = (token) => {
     try {
         var decoded = jwt_decode(token, jwtTokenUser);
         return decoded;
@@ -60,6 +63,28 @@ const jwtDecode = (token) => {
 
 };
 
+exports.jwtVerification = async (req, res, next) => {
+    try {
+      const token = req.headers.authorization.split(" ")[1];
+      if (!token) {
+        return res.status(401).json({ message: 'Authorization token missing' });
+      }
+  
+      const decode = jwt.verify(token,jwtTokenUser); // Replace 'your_secret_key' with your actual secret key
+      const userId = decode.subject._id;
+      console.log("TCL: exports.jwtVerification -> userId", userId);
+  
+      const user = await client.findOne({ _id: new mongoose.Types.ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ message: 'User not found' });
+      }
+  
+      req.user = user; // Attach the user to the request object for use in the route handlers
+      next();
+    } catch (error) {
+      return res.status(401).json({ message: 'Authentication failed', error });
+    }
+  };
 exports.encrypt = (value) => {
     let cipher = crypto.createCipheriv(algorithm, password,iv);
     let crypted = cipher.update(value, "utf8", "hex");
