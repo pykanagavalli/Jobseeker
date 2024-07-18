@@ -1,11 +1,12 @@
 const user = require("../schema/user");
+const business = require('../schema/business')
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const endecryption = require("../helper/common");
 const helper = require("../helper/common");
 const db = require("../model/db");
 const keyfile = require("../config/keyfile");
-const mongoose=require('mongoose')
+const mongoose = require('mongoose')
 
 exports.register = async (req, res) => {
   try {
@@ -17,9 +18,18 @@ exports.register = async (req, res) => {
         .json({ status: false, msg: "Register type is required" });
     }
 
-    let object;
-    const emailToCheck =
-      info.registerType === "employee" ? info.businessEmail : info.email;
+    let emailToCheck;
+    if (info.registerType === "business") {
+      emailToCheck = info.businessEmail;
+    } else if (info.registerType === "jobs") {
+      emailToCheck = info.email;
+    }
+
+    if (!emailToCheck) {
+      return res
+        .status(400)
+        .json({ status: false, msg: "Email is required" });
+    }
 
     const existingUser = await db.user.findOne(
       {
@@ -33,44 +43,42 @@ exports.register = async (req, res) => {
         businessEmail: 1,
       }
     );
+
     if (existingUser) {
       return res
         .status(400)
         .json({ status: false, msg: "This email is already used" });
     }
 
-    if (info.registerType === "employee") {
-      if (
-        !info.companyName ||
-        !info.businessNumber ||
-        !info.businessEmail ||
-        !info.address ||
-        !info.password
-      ) {
+    let object;
+    if (info.registerType === "business") {
+      const { companyName, businessNumber, businessEmail, address, password } = info;
+
+      if (!companyName || !businessNumber || !businessEmail || !password) {
         return res.status(400).json({
           status: false,
-          msg: "Missing fields for employee registration",
+          msg: "Missing fields for business registration",
         });
       }
 
       object = {
-        companyName: info.companyName,
-        businessNumber: info.businessNumber,
-        businessEmail: info.businessEmail.toLowerCase(),
-        address: info.address,
-        password: endecryption.encrypt(info.password),
+        companyName,
+        businessNumber,
+        businessEmail: businessEmail.toLowerCase(),
+        address,
+        password: endecryption.encrypt(password),
         registerType: info.registerType,
       };
 
-      const data = await db.user.create(object);
-      const token = jwt.sign({ id: data._id }, keyfile.JWT_SECRET, {
-        expiresIn: "1y",
-      });
-
+      const data = await db.business.create(object);
+      let userToken = helper.createPayload(
+        { _id: data._id, email: data.email },
+        keyfile.JWT_SECRET, { expiresIn: "1y" });
+      console.log("token", userToken);
       res.status(200).json({
         status: true,
-        msg: "Company registered successfully",
-        accessToken: token,
+        msg: "Business registered successfully",
+        accessToken: userToken,
         user: {
           id: data._id,
           companyName: data.companyName,
@@ -81,29 +89,32 @@ exports.register = async (req, res) => {
         },
       });
     } else if (info.registerType === "jobs") {
-      if (!info.email || !info.password || !info.userName || !info.phone) {
+      const { email, password, userName, phone } = info;
+
+      if (!email || !password || !userName || !phone) {
         return res
           .status(400)
           .json({ status: false, msg: "Missing fields for job registration" });
       }
 
       object = {
-        email: info.email.toLowerCase(),
-        password: endecryption.encrypt(info.password),
-        userName: info.userName,
-        phone: info.phone,
+        email: email.toLowerCase(),
+        password: endecryption.encrypt(password),
+        userName,
+        phone,
         registerType: info.registerType,
       };
 
       const data = await db.user.create(object);
-      const token = jwt.sign({ id: data._id }, keyfile.JWT_SECRET, {
-        expiresIn: "1y",
-      });
+      let userToken = helper.createPayload(
+        { _id: data._id, email: data.email },
+        keyfile.JWT_SECRET, { expiresIn: "1y" });
+      console.log("token", userToken);
 
       res.status(200).json({
         status: true,
         msg: "Job seeker registered successfully",
-        accessToken: token,
+        accessToken: userToken,
         user: {
           id: data._id,
           userName: data.userName,
@@ -124,57 +135,58 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    let info = req.body;
-
-    if (!info.email || !info.password) {
-      return res
-        .status(400)
-        .json({ status: false, msg: "Email and password are required" });
+    const info = req.body;
+    let user;
+    if (info.loginType === 'jobs') {
+      user = await db.user.findOne(
+        { email: info.email.toLowerCase() },
+        {
+          email: 1,
+          _id: 1,
+          userName: 1,
+          password: 1,
+          phone: 1,
+          address: 1,
+        }
+      );
+    } else if (info.loginType === 'business') {
+      user = await db.business.findOne(
+        { businessEmail: info.businessEmail},
+        {
+          businessEmail: 1,
+          _id: 1,
+          companyName: 1,
+          password: 1,
+          businessNumber: 1,
+          address: 1,
+        }
+      );
+    } else {
+      return res.status(400).json({ status: false, msg: "Invalid registerType" });
     }
-
-    const user = await db.user.findOne(
-      {
-        $or: [
-          { email: info.email.toLowerCase() },
-          { businessEmail: info.email.toLowerCase() },
-        ],
-      },
-      {
-        email: 1,
-        businessEmail: 1,
-        _id: 1,
-        userName: 1,
-        password: 1,
-        phone: 1,
-        businessNumber: 1,
-        companyName: 1,
-        address: 1,
-      }
-    );
 
     if (!user) {
       return res.status(404).json({ status: false, msg: "Email is incorrect" });
     }
 
-    const isPasswordCorrect =
-      user.password === endecryption.encrypt(info.password);
+    const isPasswordCorrect = user.password === endecryption.encrypt(info.password);
     if (!isPasswordCorrect) {
-      return res
-        .status(404)
-        .json({ status: false, msg: "Password is incorrect" });
+      return res.status(404).json({ status: false, msg: "Password is incorrect" });
     }
+
+    const userType = info.loginType;
+    const email = userType === 'business' ? user.businessEmail : user.email;
+    const userName = userType === 'business' ? user.companyName : user.userName;
+    const phone = userType === 'business' ? user.businessNumber : user.phone;
+    const address = user.address;
+
     let userToken = helper.createPayload(
-      { _id: user._id, email: user.email },
+      { _id: user._id, email },
       keyfile.JWT_SECRET,
       {
         expiresIn: "1y",
       }
     );
-
-    const token = jwt.sign({ id: user._id }, keyfile.JWT_SECRET, {
-      expiresIn: "1y",
-    });
-    console.log("token", userToken);
 
     res.status(200).json({
       status: true,
@@ -182,19 +194,18 @@ exports.login = async (req, res) => {
       accessToken: userToken,
       user: {
         id: user._id,
-        userName: user.userName,
-        email: user.email || user.businessEmail,
-        phone: user.phone || user.businessNumber,
-        address: user.address,
-        companyName: user.companyName,
+        userName,
+        email,
+        phone,
+        address,
+        userType,
       },
     });
   } catch (error) {
-    res
-      .status(400)
-      .json({ status: false, msg: "Login failed", error: error.message });
+    res.status(400).json({ status: false, msg: "Login failed", error: error.message });
   }
 };
+
 
 exports.resetPassword = async (req, res) => {
   try {
@@ -301,9 +312,9 @@ exports.deleteUser = async (req, res) => {
 exports.getUserDetails = async (req, res) => {
   try {
     const userId = req.user._id;
-    console.log("userid",userId)
-    const data = await db.user.findOne({_id: new mongoose.Types.ObjectId(userId)});
-    console.log('data : ' ,data.registerType)
+    console.log("userid", userId)
+    const data = await db.user.findOne({ _id: new mongoose.Types.ObjectId(userId) });
+    console.log('data : ', data.registerType)
     var object;
     if ((data.registerType == "jobs")) {
       object = {
@@ -314,7 +325,7 @@ exports.getUserDetails = async (req, res) => {
         registerType: data.registerType,
       };
     }
-     else if ((data.registerType == "employee")) {
+    else if ((data.registerType == "employee")) {
       object = {
         id: data._id,
         companyName: data.companyName,
@@ -325,7 +336,7 @@ exports.getUserDetails = async (req, res) => {
       };
     }
     if (data != null) {
-      
+
       res.status(200).json({
         status: true,
         msg: "Users details retrieved successfully",
