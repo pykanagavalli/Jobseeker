@@ -16,5 +16,8 @@ router.get('/getUserDetails',helper.verifyPayload,controller.getUserDetails)
 
 router.get('/logout',helper.verifyPayload,controller.logout)
 
+router.post('/resetPassword',controller.resetPassword)
+
+
 
 module.exports = router;

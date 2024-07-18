@@ -208,20 +208,7 @@ exports.login = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { email, newPassword, confirmPassword } = req.body;
-    if (!email || !newPassword || !confirmPassword) {
-      return res.status(400).json({
-        status: false,
-        msg: "Email, new password, and confirm password are required",
-      });
-    }
-
-    const user = await db.user.findOne({ email: email.toLowerCase() });
-
-    if (!user) {
-      return res.status(404).json({ status: false, msg: "User not found" });
-    }
-
+    const { email,businessEmail, newPassword, confirmPassword, registerType } = req.body;
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         status: false,
@@ -229,12 +216,23 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
+    let user;
+    if (registerType === 'jobs') {
+      user = await db.user.findOneAndUpdate({ email: email });
+    } else if (registerType === 'business') {
+      user = await db.business.findOneAndUpdate({ businessEmail: businessEmail });
+    } else {
+      return res.status(400).json({ status: false, msg: "Invalid registerType" });
+    }
+
+    if (!user) {
+      return res.status(404).json({ status: false, msg: "User not found" });
+    }
+
     user.password = endecryption.encrypt(newPassword);
     await user.save();
 
-    res
-      .status(200)
-      .json({ status: true, msg: "Password reset successfully", user });
+    res.status(200).json({ status: true, msg: "Password reset successfully" });
   } catch (error) {
     res.status(400).json({ status: false, msg: error.message });
   }
@@ -351,33 +349,30 @@ exports.getUserDetails = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    const authHeader = req.headers["authorization"]; // Ensure the header key is correct
+    const authHeader = req.headers["authorization"]; 
     if (!authHeader) {
       console.log("No auth header found");
-      return res.sendStatus(204); // No content
+      return res.sendStatus(204); 
     }
 
-    // Extract the token from the authorization header (assuming Bearer scheme)
     const token = authHeader.split(' ')[1];
     if (!token) {
       console.log("No token found in the authorization header");
-      return res.sendStatus(204); // No content
+      return res.sendStatus(204); 
     }
 
-    const checkIfBlacklisted = await db.blacklist.findOne({ token: token }); // Check if the token is blacklisted
+    const checkIfBlacklisted = await db.blacklist.findOne({ token: token }); 
     if (checkIfBlacklisted) {
       console.log("Token is already blacklisted");
-      return res.sendStatus(204); // No content
+      return res.sendStatus(204); 
     }
 
-    const newBlacklist = new db.blacklist({ token: token }); // Add the token to the blacklist
+    const newBlacklist = new db.blacklist({ token: token }); 
     await newBlacklist.save();
 
-    // Clear the cookie on the client side
     res.setHeader('Set-Cookie', 'accessToken=; HttpOnly; Path=/; Max-Age=0');
     res.status(200).json({ message: "You are logged out!" });
   } catch (err) {
-    console.error("Error during logout:", err);
     res.status(500).json({
       status: "error",
       message: "Internal Server Error",
