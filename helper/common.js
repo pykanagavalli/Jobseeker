@@ -62,7 +62,7 @@ exports.jwtDecode = (token) => {
     }
 
 };
-
+  
 exports.jwtVerification = async (req, res, next) => {
     try {
       const token = req.headers.authorization.split(" ")[1];
@@ -74,7 +74,7 @@ exports.jwtVerification = async (req, res, next) => {
       const userId = decode.subject._id;
       console.log("TCL: exports.jwtVerification -> userId", userId);
   
-      const user = await client.findOne({ _id: new mongoose.Types.ObjectId(userId) });
+      const user = await client.findOne({ _id: mongoose.Types.ObjectId(userId) });
       if (!user) {
         return res.status(401).json({ message: 'User not found' });
       }

@@ -1,5 +1,6 @@
 module.exports = {
   apps : [{
+    name: "job",
     script: './app.js',
     watch: '.',
     env:{
